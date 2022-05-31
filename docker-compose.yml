@@ -1,0 +1,55 @@
+version: "3.8"
+
+networks:
+  backend_network:
+    name: backend_network
+    external: true
+  public_network:
+    name: public_network
+    driver: bridge
+
+services:
+  identity-service:
+    container_name: identity-service
+    build:
+      context: .
+      dockerfile: IdentityService/Dockerfile
+    # volumes:
+    #   - IdentityService:/src/IdentityService
+    image: identity-service
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development                    # TODO: See how to handle env vars
+    networks:
+      - backend_network
+    ports:
+      - 9002:80
+    hostname: identity-service
+    depends_on:
+      - identity-service-db-server
+    entrypoint: ./wait-for-it.sh identity-service-db-server:1433 -t 30 --strict -- dotnet IdentityService.dll
+    restart: on-failure:5
+    deploy:
+      restart_policy:
+        delay: 50s
+        condition: on-failure
+        max_attempts: 5
+        window: 10s
+
+  identity-service-db-server:
+    container_name: identity-service-db-server
+    image: mcr.microsoft.com/mssql/server:2019-latest
+    volumes: 
+      - identity-service-sql-data:/var/opt/mssql
+    environment:
+        - ACCEPT_EULA="Y"
+        - SA_PASSWORD=devops-kf2021
+    ports:
+        - 10002:1433
+    networks:
+      - backend_network
+      - public_network
+
+volumes:
+  identity-service-sql-data: {}
+
+# TODO: Aliases?
